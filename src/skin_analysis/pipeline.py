@@ -13,7 +13,7 @@ from tqdm.auto import tqdm
 from .data import discover_dataset_records, load_and_preprocess_image
 from .evaluate import evaluate_model
 from .features import extract_features
-from .models import train_model
+from .models import train_model, train_ocsvm
 
 
 def _save_feature_cache(
@@ -198,7 +198,17 @@ def run_phase1_pipeline(
 
     metrics_rows = []
     model_results: dict[str, object] = {}
+    
+    print("Training Stage-1 One-Class SVM skin detector...")
+    trained_ocsvm = train_ocsvm(
+        X_train=X_train,
+        random_state=random_state,
+        nu=0.05
+    )
+    joblib.dump(trained_ocsvm, output_root / "trained_ocsvm.joblib")
+
     for model_name in ("svm", "random_forest"):
+        print(f"Training Stage-2 classifier: {model_name}...")
         trained_model = train_model(
             model_name=model_name,
             X_train=X_train,
