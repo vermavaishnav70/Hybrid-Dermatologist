@@ -1,24 +1,26 @@
 # Hybrid-Dermatologist
 
-Phase 1 baseline for a skin condition classification project using handcrafted computer vision features and classical machine learning.
-
+Phase 1 and 2 for a skin condition classification project.
+Phase 1 uses handcrafted computer vision features and classical machine learning.
+Phase 2 uses deep learning with an EfficientNet-B3 backbone and CBAM attention.
 ## Scope
 
-This repository currently implements the mandatory classical ML phase:
+This repository implements two phases:
 
+**Phase 1 (Classical ML Baseline):**
 - HSV color histogram features for redness-sensitive signals such as rosacea
 - Texture features using LBP and GLCM for texture-heavy classes such as eczema
-- Two baseline classifiers:
-  - SVM with RBF kernel
-  - Random Forest
-- Evaluation with:
-  - Accuracy
-  - Precision
-  - Recall
-  - F1 score
-  - Confusion matrix
+- Two baseline classifiers: SVM with RBF kernel and Random Forest
 
-No deep learning is used in this phase.
+**Phase 2 (Deep Learning):**
+- **EfficientNet-B3** backbone pre-trained on ImageNet.
+- **CBAM** (Convolutional Block Attention Module) to localize lesions.
+- Two-stage training: frozen backbone warm-up followed by fine-tuning.
+- Advanced Augmentation: **MixUp** and **RandAugment**.
+- Imbalance handling via `WeightedRandomSampler`.
+- **Grad-CAM** heatmaps to visualize the attention mechanism.
+
+Both phases are evaluated using Accuracy, Precision, Recall, F1 score, and Confusion Matrices.
 
 ## Expected Dataset Layout
 
@@ -48,16 +50,31 @@ pip install -r requirements.txt
 
 ## Run
 
+### Phase 1 (Baseline)
+
 ```bash
-python3 -m src.skin_analysis.main \
+python3 -m src.skin_analysis.phase1.main \
   --data-dir /path/to/dataset \
   --output-dir outputs/phase1_baseline
+```
+
+### Phase 2 (Deep Learning)
+
+```bash
+# Full pipeline: Train, Evaluate, Grad-CAM
+python3 -m src.skin_analysis.phase2.run_phase2 \
+  --data-dir "/path/to/dataset" \
+  --output-dir outputs/phase2_deep_learning \
+  --run-gradcam
+
+# Run ablation study (3 variants)
+python3 -m src.skin_analysis.phase2.run_phase2 --run-ablation
 ```
 
 ## Predict One Image
 
 ```bash
-python3 -m src.skin_analysis.predict \
+python3 -m src.skin_analysis.phase1.predict \
   --image /path/to/image.jpg \
   --model outputs/phase1_baseline_msc6/trained_pipeline_random_forest.joblib \
   --label-map data/processed/label_mapping.json
@@ -94,18 +111,32 @@ In `data/processed/` by default:
 
 ```text
 notebooks/
-  01_eda_dataset_overview.ipynb
-  02_feature_engineering.ipynb
-  03_model_training.ipynb
-  04_evaluation_and_interpretation.ipynb
+  phase1/
+    01_eda_dataset_overview.ipynb
+    02_feature_engineering.ipynb
+    03_model_training.ipynb
+    04_evaluation_and_interpretation.ipynb
+  phase2/
+    05_phase2_deep_learning.ipynb
 src/skin_analysis/
-  data.py
-  evaluate.py
-  features.py
-  main.py
-  models.py
-  pipeline.py
-  predict.py
+  phase1/
+    __init__.py
+    data.py
+    evaluate.py
+    features.py
+    main.py
+    models.py
+    pipeline.py
+    predict.py
+  phase2/
+    __init__.py
+    augment.py
+    config.py
+    evaluate_phase2.py
+    gradcam.py
+    model.py
+    run_phase2.py
+    train.py
 ```
 
 ## Notebook Workflow

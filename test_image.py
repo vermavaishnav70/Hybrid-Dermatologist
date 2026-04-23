@@ -3,8 +3,8 @@ import json
 import joblib
 import numpy as np
 
-from src.skin_analysis.data import load_and_preprocess_image
-from src.skin_analysis.features import extract_features
+from src.skin_analysis.phase1.data import load_and_preprocess_image
+from src.skin_analysis.phase1.features import extract_features
 
 image_path = Path("/Users/vaishnavverma/Downloads/1.jpeg")
 model_path = Path("outputs/phase1_baseline/trained_pipeline_random_forest.joblib")
