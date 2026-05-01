@@ -1,158 +1,236 @@
-# Hybrid-Dermatologist
+# Hybrid Skin Analysis & Care Recommendation System
 
-Phase 1 and 2 for a skin condition classification project.
-Phase 1 uses handcrafted computer vision features and classical machine learning.
-Phase 2 uses deep learning with an EfficientNet-B3 backbone and CBAM attention.
-## Scope
+> **Final-Year Project — Hybrid Dermatologist**
+> A three-phase ablation study comparing Classical ML, Deep Learning, and Hybrid Fusion
+> for automated skin condition classification and personalised skincare recommendation.
 
-This repository implements two phases:
+---
 
-**Phase 1 (Classical ML Baseline):**
-- HSV color histogram features for redness-sensitive signals such as rosacea
-- Texture features using LBP and GLCM for texture-heavy classes such as eczema
-- Two baseline classifiers: SVM with RBF kernel and Random Forest
+## Results Summary
 
-**Phase 2 (Deep Learning):**
-- **EfficientNet-B3** backbone pre-trained on ImageNet.
-- **CBAM** (Convolutional Block Attention Module) to localize lesions.
-- Two-stage training: frozen backbone warm-up followed by fine-tuning.
-- Advanced Augmentation: **MixUp** and **RandAugment**.
-- Imbalance handling via `WeightedRandomSampler`.
-- **Grad-CAM** heatmaps to visualize the attention mechanism.
+| Model | Phase | Val Accuracy | F1 Weighted | F1 Macro |
+|-------|-------|:---:|:---:|:---:|
+| SVM (RBF Kernel) | Phase 1 | 0.785 | 0.788 | 0.771 |
+| Random Forest | Phase 1 | 0.809 | 0.806 | 0.784 |
+| EfficientNet-B3 + CBAM | Phase 2 | 0.853 | 0.852 | 0.842 |
+| **Hybrid Fusion (Ours)** | **Phase 3** | **0.854** | **0.854** | **0.842** |
 
-Both phases are evaluated using Accuracy, Precision, Recall, F1 score, and Confusion Matrices.
+### Ablation Study (Phase 3)
 
-## Expected Dataset Layout
+| Variant | F1 Weighted | Δ vs Full Model |
+|---------|:-----------:|:---------------:|
+| Hybrid Fusion (full model) | **0.8538** | baseline |
+| Concat instead of Attention | 0.8550 | ≈ tie (+0.1%) |
+| CNN only (no ML features) | 0.8419 | −1.4% |
+| ML only (no CNN) | 0.1365 | **−84.0% collapse** |
 
-Store images in class-named folders:
+> The 84% collapse proves the CNN stream is the primary performance driver.
+> The 1.4% drop when ML features are removed proves they add measurable value.
 
-```text
-dataset/
-  acne/
-    img_001.jpg
-    img_002.jpg
-  dark_spots/
-  eczema/
-  normal/
-  rosacea/
-  wrinkles/
+---
+
+## Architecture
+
+```
+Input Image
+     │
+     ├─── CNN Stream ──────────────────────────────────────────────────────────┐
+     │    EfficientNet-B3 (pretrained ImageNet)                                │
+     │    + CBAM Attention (channel + spatial)                                 │
+     │    → cnn_embed: (B, 1536)                                               │
+     │    → cnn_proj:  (B, 512)  via Linear + BN + GELU                       │
+     │                                                                         │
+     └─── ML Stream ───────────────────────────────────────────────────────────┤
+          Phase 1 Handcrafted Features (154 dims):                             │
+          • HSV Color Histogram (96 dims) — redness / pigmentation             │
+          • LBP Texture (26 dims)         — dryness / bumps                    │
+          • GLCM Texture (32 dims)        — scarring / macro-texture           │
+          → ml_proj: (B, 512) via Linear + BN + GELU                          │
+                                                                               │
+                    Attention Gate: α = sigmoid(W · [cnn_embed; ml_features])  │
+                    fused = α · cnn_proj + (1−α) · ml_proj                    │
+                                                                               │
+                    Classifier: 512 → 256 → 6 classes                         │
+                         ↓
+              [acne | dark_spots | eczema | normal | rosacea | wrinkles]
 ```
 
-The loader also accepts dataset roots that contain split folders such as `train/`, `val/`, `valid/`, or `test/`. In that case it automatically gathers class folders from those splits and normalizes names like `class0_normal` to `normal`.
+**Key Innovation:** The attention gate learns *per sample* how much to trust each stream. Texture-heavy conditions (eczema) → α shifts toward ML. Complex spatial conditions (acne, rosacea) → α shifts toward CNN.
 
-## Installation
+---
 
+## Dataset
+
+**Multi-Class Skin Condition Image Dataset (MSC-6)**
+- 6 classes: `acne`, `dark_spots`, `eczema`, `normal`, `rosacea`, `wrinkles`
+- ~9,400 images total | 7,879 train / 944 val / 1,179 test
+- Imbalance handling: `WeightedRandomSampler` + inverse-frequency loss weights
+
+Expected layout:
+```
+data/raw/Multi-Class Skin Condition Image Dataset (MSC-6)/
+  train/
+    acne/
+    dark_spots/
+    eczema/
+    normal/
+    rosacea/
+    wrinkles/
+  val/
+  test/
+```
+
+---
+
+## Setup & Commands
+
+### 1. Environment
 ```bash
-python3 -m venv .venv
+bash setup.sh               # Creates .venv, installs all dependencies
 source .venv/bin/activate
-pip install -r requirements.txt
 ```
 
-## Run
-
-### Phase 1 (Baseline)
-
+### 2. Pre-compute ML Features (do this ONCE before training)
 ```bash
-python3 -m src.skin_analysis.phase1.main \
-  --data-dir /path/to/dataset \
-  --output-dir outputs/phase1_baseline
+make precompute             # Parallel LBP/GLCM extraction → 50x training speedup
 ```
 
-### Phase 2 (Deep Learning)
-
+### 3. Training
 ```bash
-# Full pipeline: Train, Evaluate, Grad-CAM
-python3 -m src.skin_analysis.phase2.run_phase2 \
-  --data-dir "/path/to/dataset" \
-  --output-dir outputs/phase2_deep_learning \
-  --run-gradcam
-
-# Run ablation study (3 variants)
-python3 -m src.skin_analysis.phase2.run_phase2 --run-ablation
+make train-a                # Phase 1: SVM + Random Forest
+make train-b                # Phase 2: EfficientNet-B3 + CBAM (two-stage)
+make train-c                # Phase 3: Hybrid Fusion (auto-resumes from checkpoint)
+make train                  # All three phases sequentially
 ```
 
-## Predict One Image
-
+### 4. Evaluation & Ablation
 ```bash
-python3 -m src.skin_analysis.phase1.predict \
-  --image /path/to/image.jpg \
-  --model outputs/phase1_baseline_msc6/trained_pipeline_random_forest.joblib \
-  --label-map data/processed/label_mapping.json
+make eval                   # Confusion matrix, classification report, cross-phase comparison
+make ablation               # Component-removal ablation study
+make gradcam                # Grad-CAM heatmaps for all 6 classes
+make calibrate              # Temperature scaling + ECE reliability diagram
 ```
 
-By default, the predictor:
+### 5. Demo
+```bash
+make demo                   # Launch Streamlit web app on localhost:8501
+```
 
-- tries to crop the largest detected face before feature extraction
-- falls back to a center crop if no face is detected
-- prints `uncertain` when the top probability is below `0.60`
-- can save the exact crop used via `--save-crop`
+### 6. Docker
+```bash
+make docker                 # Build and run in container
+```
 
-## Outputs
-
-Each run writes model artifacts and processed artifacts separately.
-
-In the selected output directory, for example `outputs/phase1_baseline_msc6/`:
-
-- `metrics_summary.csv`
-- `classification_report_<model>.csv`
-- `confusion_matrix_<model>.csv`
-- `confusion_matrix_<model>.png`
-- `classwise_metrics_<model>.png`
-- `trained_pipeline_<model>.joblib`
-
-In `data/processed/` by default:
-
-- `features_dataset.csv`
-- `train_test_split.csv`
-- `label_mapping.json`
-- `skipped_files.csv` when unreadable files are found
+---
 
 ## Project Structure
 
-```text
-notebooks/
-  phase1/
-    01_eda_dataset_overview.ipynb
-    02_feature_engineering.ipynb
-    03_model_training.ipynb
-    04_evaluation_and_interpretation.ipynb
-  phase2/
-    05_phase2_deep_learning.ipynb
-src/skin_analysis/
-  phase1/
-    __init__.py
-    data.py
-    evaluate.py
-    features.py
-    main.py
-    models.py
-    pipeline.py
-    predict.py
-  phase2/
-    __init__.py
-    augment.py
-    config.py
-    evaluate_phase2.py
-    gradcam.py
-    model.py
-    run_phase2.py
-    train.py
+```
+Hybrid-Dermatologist/
+├── app/
+│   └── streamlit_app.py        # Production Streamlit UI (skin crop, recommendations)
+├── data/
+│   └── raw/                    # MSC-6 dataset (not committed to git)
+├── docker/
+│   └── Dockerfile
+├── notebooks/
+│   ├── phase1/                 # 01–04: EDA, features, training, evaluation
+│   ├── phase2/                 # phase2.ipynb: EfficientNet-B3 deep learning
+│   └── phase3/
+│       ├── 05_hybrid_model_training.ipynb      # Model C training (crash-safe)
+│       ├── 06_final_evaluation_and_ablation.ipynb  # Ablation study
+│       └── 07_interpretability_and_gradcam.ipynb   # Grad-CAM + attention
+├── outputs/
+│   ├── phase1_baseline/        # SVM/RF models, metrics, confusion matrices
+│   ├── phase2_deep_learning/   # EfficientNet weights, Grad-CAM, metrics
+│   └── phase3_hybrid/          # Hybrid model, ablation CSV, all visualizations
+├── scripts/
+│   ├── precompute_features.py  # Parallel ML feature extraction
+│   └── gpt4v_baseline.py       # GPT-4V zero-shot baseline
+├── src/skin_analysis/
+│   ├── phase1/                 # data.py, features.py, models.py, pipeline.py
+│   ├── phase2/                 # model.py (EfficientNet+CBAM), train.py, gradcam.py
+│   └── phase3/
+│       ├── config.py           # All hyperparameters (single source of truth)
+│       ├── model_c.py          # HybridFusionModel with attention gate
+│       ├── dataset.py          # HybridSkinDataset with feature caching
+│       ├── train_c.py          # Two-stage training with crash-safe checkpointing
+│       ├── evaluate_all.py     # Cross-phase evaluation
+│       ├── ablation.py         # Component-removal ablation runner
+│       ├── calibrate.py        # Temperature scaling + ECE
+│       └── gradcam_hybrid.py   # Grad-CAM for the hybrid model
+├── Makefile                    # One-command pipeline
+├── requirements.txt
+├── setup.sh
+└── README.md
 ```
 
-## Notebook Workflow
+---
 
-The notebooks are modular and mirror the Phase 1 workflow:
+## Outputs Generated
 
-- `01_eda_dataset_overview.ipynb`: dataset balance, image sizes, and sample inspection
-- `02_feature_engineering.ipynb`: HSV histogram, LBP, GLCM, and combined feature vectors
-- `03_model_training.ipynb`: `X` and `y` creation, stratified split, SVM and Random Forest training
-- `04_evaluation_and_interpretation.ipynb`: confusion matrices, class-wise metrics, and report-ready interpretation
+All artifacts are stored in `outputs/phase3_hybrid/`:
 
-They import functions from `src/skin_analysis/` rather than duplicating the implementation.
+| File | Description |
+|------|-------------|
+| `best_model_hybrid.pth` | Best model weights (by val F1) |
+| `training_history.csv` | Per-epoch loss, accuracy, F1 (15 epochs) |
+| `confusion_matrix_hybrid.png` | Per-class classification performance |
+| `ablation_component_removal.csv` | Full ablation results table |
+| `ablation_bar_chart.png` | Visual ablation comparison |
+| `ablation_diagnostics.txt` | Written diagnostic interpretation |
+| `cross_phase_comparison.png` | Phase 1 vs 2 vs 3 comparison chart |
+| `gradcam_summary_hybrid.png` | 6-class Grad-CAM heatmap grid |
+| `gradcam_hybrid_<class>_*.png` | Individual Grad-CAM images per class |
+| `attention_weight_distribution.png` | CNN vs ML trust (α) per condition |
+| `feature_importance_per_class.png` | ML feature gradient importance |
+| `per_class_ml_impact.png` | Per-class F1 drop when ML stream removed |
 
-## Why These Features
+---
 
-- Rosacea is often color-dominant because redness is a strong cue, so HSV histograms help capture that.
-- Eczema is often texture-dominant because of dry and flaky visual patterns, so LBP and GLCM are important.
+## Streamlit App Features
 
-That feature reasoning is reflected directly in the implementation so it is explainable in a report or viva.
+- **Upload** any face/skin image (JPG, PNG, WEBP)
+- **Auto skin-crop** using OpenCV HSV detection before analysis
+- **Dual validation**: One-Class SVM + Heuristic colour check to reject non-skin images
+- **Hybrid inference**: Real-time classification into 6 skin conditions
+- **Grad-CAM overlay**: Visual explanation of where the model is looking
+- **Skincare recommendations**: Ingredient suggestions per condition
+- **Climate & skin-type tips**: Personalised advice for tropical, dry, and cold climates
+- **Clinical disclaimer**: Prominently displayed on every result
+
+---
+
+## Reproducibility
+
+All experiments use `seed_everything(42)` which seeds:
+- Python `random`, `numpy`, `torch`, and `torch.cuda`/`torch.mps`
+
+**Checkpointing:** Training saves the full state (model + optimizer + scheduler + history) every epoch. If training is interrupted, re-running `make train-c` automatically resumes from the last saved epoch.
+
+---
+
+## Per-Class Performance (Hybrid Fusion, Final)
+
+| Class | F1 Score | Notes |
+|-------|:--------:|-------|
+| Acne | 0.797 | Visually similar to early-stage rosacea |
+| Dark Spots | 0.764 | Hardest class — subtle vs normal skin |
+| Eczema | 0.856 | Texture signals from LBP/GLCM help significantly |
+| Normal | 0.913 | Easiest — clear visual distinction |
+| Rosacea | 0.818 | Requires both colour and spatial features |
+| Wrinkles | 0.907 | CNN detects fine line patterns well |
+
+---
+
+## Citation / References
+
+- Tan, M., & Le, Q. V. (2019). EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. *ICML*.
+- Woo, S., et al. (2018). CBAM: Convolutional Block Attention Module. *ECCV*.
+- Ojala, T., et al. (2002). Multiresolution Gray-Scale and Rotation Invariant Texture Classification with Local Binary Patterns. *IEEE TPAMI*.
+- Selvaraju, R. R., et al. (2017). Grad-CAM: Visual Explanations from Deep Networks. *ICCV*.
+- Dataset: Multi-Class Skin Condition Image Dataset (MSC-6), Kaggle.
+
+---
+
+*This project was developed as a final-year research project. It is for educational purposes only and does not constitute medical advice.*

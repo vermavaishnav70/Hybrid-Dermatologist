@@ -1,0 +1,6 @@
+Metric,Phase 1 (RF),Phase 2 (EfficientNet-B3 + CBAM),Improvement
+Accuracy,0.8090,0.8528,+0.0438 (+5.4%)
+F1 (weighted),0.8060,0.8523,+0.0463 (+5.7%)
+F1 (macro),—,0.8416,—
+Precision (weighted),—,0.8537,—
+Recall (weighted),—,0.8528,—

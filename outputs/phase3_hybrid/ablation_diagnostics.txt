@@ -1,0 +1,9 @@
+Ablation Study — Diagnostic Analysis
+==================================================
+
+• Removing Glued ML & DL (Concat): F1 improved by 0.0012 (0.1%). Simple concatenation instead of attention-weighted fusion.
+
+• Removing Only DL (CNN Only): F1 dropped by 0.0119 (1.4%). All handcrafted ML features zeroed out (Deep Learning only).
+
+• Removing Only ML (Classical Only): F1 dropped by 0.7173 (84.0%). CNN features zeroed out (Handcrafted ML features only).
+

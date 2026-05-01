@@ -1,8 +1,50 @@
-.venv/
+# Python
 __pycache__/
 *.py[cod]
-.DS_Store
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
 
-outputs/
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Model weights and large checkpoints (too large for git)
+outputs/**/*.pth
+outputs/**/*.pt
+outputs/**/checkpoint_*.pth
+
+# Feature cache (regenerated via make precompute)
+outputs/**/feature_cache/
+
+# Data directory (dataset not committed)
 data/raw/
-data/processed/
+
+# Matplotlib cache
+.matplotlib/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Env files (keep .env.example but not .env)
+.env
+*.env
+
+# Logs
+*.log
