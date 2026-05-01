@@ -13,7 +13,7 @@
 #    make docker       # Build and run Docker container
 #    make all          # Full pipeline: train + eval + ablation + gradcam
 
-.PHONY: install train train-a train-b train-c eval ablation gradcam calibrate demo docker all clean
+.PHONY: install precompute train train-a train-b train-c eval ablation gradcam calibrate demo docker all clean
 
 # ── Configuration ─────────────────────────────────────────────────────────
 PYTHON      = python3
@@ -25,6 +25,11 @@ OUTPUT_C    = outputs/phase3_hybrid
 # ── Setup ─────────────────────────────────────────────────────────────────
 install:
 	bash setup.sh
+
+# ── Data & Features ──────────────────────────────────────────────────────
+precompute:
+	@echo "🚀 Pre-computing ML features (LBP/GLCM) to eliminate bottlenecks..."
+	$(PYTHON) scripts/precompute_features.py
 
 # ── Phase 1: Classical ML (SVM + Random Forest) ──────────────────────────
 train-a:

@@ -80,7 +80,13 @@ class HybridSkinDataset(Dataset):
             label_idx = self.class_to_idx[label]
             for img_path in sorted(folder.rglob("*")):
                 if img_path.is_file() and img_path.suffix.lower() in VALID_IMAGE_EXTENSIONS:
-                    self.samples.append((img_path, label_idx))
+                    # Pre-calculate cache path to avoid MD5 overhead during training
+                    cache_path = self._get_cache_path(img_path)
+                    self.samples.append({
+                        "path": img_path,
+                        "label": label_idx,
+                        "cache_path": cache_path
+                    })
 
         if not self.samples:
             raise ValueError(f"No images found in {self.data_dir}")
@@ -129,22 +135,31 @@ class HybridSkinDataset(Dataset):
         return features
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, int]:
-        path, label_idx = self.samples[index]
+        sample = self.samples[index]
+        path, label_idx, cache_path = sample["path"], sample["label"], sample["cache_path"]
 
         # ── CNN stream: PIL Image -> transform -> tensor ──────────────────
         image = Image.open(path).convert("RGB")
         if self.transform is not None:
             image = self.transform(image)
 
-        # ── ML stream: extract handcrafted features ───────────────────────
-        ml_features = self._extract_ml_features(path)
+        # ── ML stream: load features (cached) ─────────────────────────────
+        # If cache exists, loading is instantaneous. 
+        # If not, extraction will be slow (20s+).
+        if cache_path and cache_path.exists():
+            ml_features = np.load(cache_path)
+        else:
+            # Fallback for missing cache (triggers slowness warning)
+            # print(f"⚠️  Cache miss for {path.name}. Extracting on-the-fly (SLOW)...")
+            ml_features = self._extract_ml_features(path)
+            
         ml_features = torch.from_numpy(ml_features).float()
 
         return image, ml_features, label_idx
 
     def get_labels(self) -> list[int]:
         """Return all labels for use with WeightedRandomSampler."""
-        return [label for _, label in self.samples]
+        return [s["label"] for s in self.samples]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
