@@ -53,12 +53,12 @@ class Phase3Config:
     randaug_num_ops: int = 2
 
     # ── Training — Stage 1: fusion head only (backbone frozen) ────────────
-    epochs_stage1: int = 10
+    epochs_stage1: int = 5
     lr_stage1: float = 1e-3
     label_smoothing: float = 0.1
 
     # ── Training — Stage 2: fine-tune backbone + fusion ───────────────────
-    epochs_stage2: int = 25
+    epochs_stage2: int = 10
     lr_stage2_backbone: float = 2e-5
     lr_stage2_head: float = 1e-4
     warmup_epochs: int = 3
