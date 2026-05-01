@@ -40,7 +40,7 @@ class Phase3Config:
     hidden_dim: int = 512         # Classifier hidden layer
     dropout: float = 0.4
     cbam_reduction: int = 16
-    unfreeze_blocks: int = 3
+    unfreeze_blocks: int = 2  # Reduced for Mac performance
 
     # ── Image preprocessing ───────────────────────────────────────────────
     image_size: int = 300         # EfficientNet-B3 native resolution
@@ -65,9 +65,9 @@ class Phase3Config:
     early_stopping_patience: int = 7
 
     # ── DataLoader ────────────────────────────────────────────────────────
-    batch_size: int = 32
-    num_workers: int = 4
-    pin_memory: bool = True
+    batch_size: int = 8  # Reduced from 32 to avoid memory swapping on Mac
+    num_workers: int = 0  # Set to 0 on Mac for faster MPS data transfer
+    pin_memory: bool = False # MPS does not support pinned memory
     prefetch_factor: int = 2
 
     # ── Paths ─────────────────────────────────────────────────────────────

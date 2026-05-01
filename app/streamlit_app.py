@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 import cv2
+import joblib
 import numpy as np
 import streamlit as st
 import torch
@@ -142,6 +143,82 @@ def extract_ml_features_from_pil(image: Image.Image) -> torch.Tensor:
     return torch.from_numpy(features).float().unsqueeze(0)
 
 
+@st.cache_resource
+def load_ocsvm():
+    """Load the trained One-Class SVM for skin detection/anomaly check."""
+    # Check common locations for the OCSVM artifact
+    search_paths = [
+        PROJECT_ROOT / "outputs" / "phase1_baseline" / "trained_ocsvm.joblib",
+        PROJECT_ROOT / "outputs" / "phase1_baseline_msc6" / "trained_ocsvm.joblib",
+    ]
+    for path in search_paths:
+        if path.exists():
+            try:
+                return joblib.load(path)
+            except Exception:
+                continue
+    return None
+
+
+def heuristic_skin_check(image: Image.Image, threshold: float = 0.15) -> bool:
+    """A fallback heuristic to check if an image contains skin-like colors."""
+    img_np = np.array(image)
+    img_hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+
+    # Common skin color range in HSV (Hue: 0-20, Saturation: 20-150, Value: 60-255)
+    lower = np.array([0, 20, 60], dtype=np.uint8)
+    upper = np.array([25, 170, 255], dtype=np.uint8)
+
+    mask = cv2.inRange(img_hsv, lower, upper)
+    skin_ratio = cv2.countNonZero(mask) / (img_np.shape[0] * img_np.shape[1])
+    return skin_ratio >= threshold
+
+
+def auto_crop_skin(image: Image.Image, padding_ratio: float = 0.1) -> Image.Image:
+    """Detects the largest skin area using OpenCV and crops the image around it."""
+    img_np = np.array(image)
+    img_hsv = cv2.cvtColor(img_np, cv2.COLOR_RGB2HSV)
+
+    # Common skin color range in HSV
+    lower = np.array([0, 20, 60], dtype=np.uint8)
+    upper = np.array([25, 170, 255], dtype=np.uint8)
+
+    mask = cv2.inRange(img_hsv, lower, upper)
+    
+    # Clean up mask with morphology
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    # Find contours
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    if not contours:
+        return image # Fallback to original if no skin detected
+
+    # Find the largest contour
+    largest_contour = max(contours, key=cv2.contourArea)
+    
+    # If the skin area is tiny (less than 1000 pixels), ignore it
+    if cv2.contourArea(largest_contour) < 1000:
+        return image
+
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    
+    # Add padding
+    height, width = img_np.shape[:2]
+    pad_x = int(w * padding_ratio)
+    pad_y = int(h * padding_ratio)
+
+    x0 = max(0, x - pad_x)
+    y0 = max(0, y - pad_y)
+    x1 = min(width, x + w + pad_x)
+    y1 = min(height, y + h + pad_y)
+
+    cropped_np = img_np[y0:y1, x0:x1]
+    return Image.fromarray(cropped_np)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Streamlit app
 # ═══════════════════════════════════════════════════════════════════════════
@@ -179,6 +256,7 @@ def main():
     }
     .disclaimer {
         background-color: #fff3cd;
+        color: #856404;
         border: 1px solid #ffc107;
         border-radius: 8px;
         padding: 1rem;
@@ -231,15 +309,64 @@ def main():
             st.subheader("📷 Uploaded Image")
             st.image(image, use_container_width=True)
 
+            use_skin_crop = st.checkbox("Auto-crop to skin area before analysis", value=True)
+            
+            if use_skin_crop:
+                with st.spinner("Isolating skin area..."):
+                    processing_image = auto_crop_skin(image)
+                    if processing_image.size != image.size:
+                        st.image(processing_image, caption="Cropped Skin Area (Used for Analysis)", use_container_width=True)
+                    else:
+                        st.info("Could not identify a distinct skin bounding box. Using full image.")
+            else:
+                processing_image = image
+
+        # ── Validation Check ──────────────────────────────────────────────────
+        ocsvm = load_ocsvm()
+        is_skin = True
+        validation_method = "None"
+
+        if ocsvm:
+            with st.spinner("Verifying skin content..."):
+                ml_features = extract_ml_features_from_pil(processing_image).numpy()
+                # OCSVM returns 1 for inlier (skin), -1 for outlier
+                is_skin_ocsvm = ocsvm.predict(ml_features)[0] == 1
+                is_skin_heuristic = heuristic_skin_check(processing_image)
+                
+                if is_skin_ocsvm:
+                    is_skin = True
+                    validation_method = "One-Class SVM"
+                elif is_skin_heuristic:
+                    is_skin = True
+                    validation_method = "Heuristic Color Check (OCSVM was strict)"
+                else:
+                    is_skin = False
+                    validation_method = "OCSVM & Heuristic Color Check"
+        else:
+            # Fallback to heuristic
+            is_skin = heuristic_skin_check(processing_image)
+            validation_method = "Heuristic Color Check"
+
+        if not is_skin:
+            st.error("🚨 **Validation Failed:** This image does not appear to be a standard skin image.")
+            st.warning(f"Validation Method: {validation_method}")
+            st.info("The model is trained specifically on dermatological data. Using non-skin images will lead to inaccurate results.")
+
+            if not st.checkbox("Ignore warning and proceed anyway?", value=False):
+                st.info("Please upload a clear image of a skin condition.")
+                st.stop()
+        else:
+            st.success(f"✅ Image validated as skin content (via {validation_method})")
+
         # ── Inference ─────────────────────────────────────────────────────
         with st.spinner("Analysing skin condition..."):
             model, device, model_type = load_model()
             cfg = Phase3Config()
 
-            img_tensor = preprocess_image(image, cfg)
+            img_tensor = preprocess_image(processing_image, cfg)
 
             if model_type == "hybrid":
-                ml_features = extract_ml_features_from_pil(image)
+                ml_features = extract_ml_features_from_pil(processing_image)
                 ml_features = ml_features.to(device)
                 img_tensor = img_tensor.to(device)
 
@@ -304,6 +431,16 @@ def main():
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+
+        # Skin Type-specific advice
+        if skin_type == "Dry":
+            st.info("💧 **Dry Skin Tip:** Look for rich, ceramide-heavy moisturisers and avoid products with high alcohol content. Consider 'slugging' with an occlusive ointment at night to lock in moisture.")
+        elif skin_type == "Oily":
+            st.info("🌿 **Oily Skin Tip:** Opt for lightweight, oil-free water creams or gel moisturisers. Niacinamide and BHAs will help regulate your natural sebum production.")
+        elif skin_type == "Sensitive":
+            st.info("🪶 **Sensitive Skin Tip:** Stick to fragrance-free, hypoallergenic products. Always patch-test new ingredients and introduce actives (like acids or retinols) very slowly.")
+        elif skin_type == "Combination":
+            st.info("⚖️ **Combination Skin Tip:** You may need to 'multi-mask' or use different moisturisers for different zones (e.g., a light gel on the T-zone and a richer cream on the cheeks).")
 
         # Climate-specific advice
         if "Tropical" in climate:

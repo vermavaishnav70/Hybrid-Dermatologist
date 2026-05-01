@@ -66,34 +66,24 @@ def run_ablation_study(
     # ── Define ablation variants ──────────────────────────────────────────
     variants = [
         {
-            "name": "Full Model C (Hybrid Fusion)",
+            "name": "Hybrid Fusion (Interaction/Attention)",
             "ablation_mode": None,
-            "description": "Complete model with attention-weighted fusion of CNN + ML features",
+            "description": "Full model with attention-weighted fusion of DL + ML features",
         },
         {
-            "name": "C minus attention (concat)",
+            "name": "Glued ML & DL (Concat)",
             "ablation_mode": "no_attention",
             "description": "Simple concatenation instead of attention-weighted fusion",
         },
         {
-            "name": "C minus GLCM",
-            "ablation_mode": "no_glcm",
-            "description": "GLCM texture features zeroed out (dims 122:154)",
-        },
-        {
-            "name": "C minus LBP",
-            "ablation_mode": "no_lbp",
-            "description": "LBP texture features zeroed out (dims 96:122)",
-        },
-        {
-            "name": "C minus color",
-            "ablation_mode": "no_color",
-            "description": "HSV color histogram features zeroed out (dims 0:96)",
-        },
-        {
-            "name": "C minus all ML",
+            "name": "Only DL (CNN Only)",
             "ablation_mode": "no_ml",
-            "description": "All handcrafted ML features zeroed out (CNN-only through fusion)",
+            "description": "All handcrafted ML features zeroed out (Deep Learning only)",
+        },
+        {
+            "name": "Only ML (Classical Only)",
+            "ablation_mode": "no_dl",
+            "description": "CNN features zeroed out (Handcrafted ML features only)",
         },
     ]
 

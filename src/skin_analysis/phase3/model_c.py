@@ -270,6 +270,9 @@ class HybridFusionModel(nn.Module):
         # ── Extract CNN features ──────────────────────────────────────────
         cnn_embed = self._extract_cnn_features(images)  # (B, 1536)
 
+        if self.ablation_mode == "no_dl":
+            cnn_embed = torch.zeros_like(cnn_embed)
+
         # ── Apply ablation mask to ML features ────────────────────────────
         ml_features = self._apply_ablation_mask(ml_features)
 
