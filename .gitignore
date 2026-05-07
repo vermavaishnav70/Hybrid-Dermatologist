@@ -23,9 +23,9 @@ env/
 .AppleDouble
 .LSOverride
 
-# Model weights and large checkpoints (too large for git)
-outputs/**/*.pth
-outputs/**/*.pt
+# # Model weights and large checkpoints (too large for git)
+# outputs/**/*.pth
+# outputs/**/*.pt
 outputs/**/checkpoint_*.pth
 
 # Feature cache (regenerated via make precompute)
