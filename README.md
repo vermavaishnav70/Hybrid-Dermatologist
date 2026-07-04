@@ -1,6 +1,6 @@
 # Hybrid Skin Analysis & Care Recommendation System
 
-> **Final-Year Project — Hybrid Dermatologist**
+> **Hybrid Dermatologist**
 > A three-phase ablation study comparing Classical ML, Deep Learning, and Hybrid Fusion
 > for automated skin condition classification and personalised skincare recommendation.
 
