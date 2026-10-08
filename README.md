@@ -121,6 +121,32 @@ make demo                   # Launch Streamlit web app on localhost:8501
 make docker                 # Build and run in container
 ```
 
+### 7. Deploy on Streamlit Community Cloud
+
+The repository includes the Streamlit entry point, a Python runtime pin, and
+headless OpenCV for Linux-based hosting. The trained checkpoints are tracked
+under `outputs/`, so no dataset download or training run is required at
+startup.
+
+1. Push this repository to GitHub, including
+   `outputs/phase3_hybrid/best_model_hybrid.pth`.
+2. Open [share.streamlit.io](https://share.streamlit.io/) and choose **New
+   app**.
+3. Select the repository and branch, then set **Main file path** to
+   `app/streamlit_app.py`.
+4. Deploy. Streamlit Cloud will install `requirements.txt` and use Python
+   3.11 from `runtime.txt`.
+
+For local parity, run:
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+The app runs inference on CPU and may take a short time on the first image
+while the model is loaded. If a checkpoint is missing, startup fails with an
+explicit message rather than returning predictions from an untrained model.
+
 ---
 
 ## Project Structure

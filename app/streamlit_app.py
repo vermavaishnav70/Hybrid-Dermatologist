@@ -96,16 +96,22 @@ def load_model():
     cfg = Phase3Config()
     device = torch.device("cpu")  # Streamlit runs on CPU for portability
 
-    checkpoint_path = cfg.output_dir / "best_model_hybrid.pth"
+    checkpoint_path = PROJECT_ROOT / cfg.output_dir / "best_model_hybrid.pth"
 
     # Fall back to Phase 2 model if hybrid not trained yet
     if not checkpoint_path.exists():
         st.warning("Hybrid model not found. Falling back to Phase 2 model.")
         from src.skin_analysis.phase2.model import EfficientNetB3CBAM
         model = EfficientNetB3CBAM(num_classes=6, pretrained=False)
-        p2_path = Path("outputs/phase2_deep_learning/best_model_phase2.pth")
-        if p2_path.exists():
-            model.load_state_dict(torch.load(p2_path, map_location=device, weights_only=True))
+        p2_path = PROJECT_ROOT / "outputs" / "phase2_deep_learning" / "best_model_phase2.pth"
+        if not p2_path.exists():
+            raise FileNotFoundError(
+                "No trained model checkpoint was found. "
+                "Commit outputs/phase3_hybrid/best_model_hybrid.pth "
+                "or outputs/phase2_deep_learning/best_model_phase2.pth "
+                "before deploying."
+            )
+        model.load_state_dict(torch.load(p2_path, map_location=device, weights_only=True))
         model.eval()
         return model, device, "phase2"
 
